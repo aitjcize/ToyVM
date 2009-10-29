@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
         char* ch;
         ch = strtok(dinput, " ");
         ch = strtok(NULL, " ");
-        tmp = Hex2Int(ch);
+        if(ch != NULL) tmp = Hex2Int(ch);
         if(ch != NULL && tmp > 0 && tmp < 256) id = tmp;
         for(i = id -5 *(id > 5); i <= id +4; i++) {
           /* Int2Hex returns a local static, so we must print it with two lines. */
