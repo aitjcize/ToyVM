@@ -52,7 +52,7 @@ bool use_external_input = false;
 
 struct _tdb {
   unsigned int enabled  : 1;
-  unsigned int mode     : 2;                  /* 0: stopped,  1: running, 2: step*/
+  unsigned int mode     : 2;             /* 0: stopped,  1: running, 2: step*/
   unsigned int verbose  : 1;
 } tdb;
 
@@ -134,16 +134,16 @@ int main(int argc, char *argv[])
     /* check break point then step */
     if(b_count > 0) {
       for(i = 0; i < b_count; i++)
-        if(pc == breakpoints[i])
+        if(pc == breakpoints[i]) {
+          tdb.mode = 2;
+          printf("Breakpoint %d at %s: 0x%s\n", i +1, toyfile, Int2Hex(breakpoints[i]));
           break;
-      if(i != b_count) {
-        tdb.mode = 2;
-        printf("Breakpoint %d at %s: 0x%s\n", i +1, toyfile, Int2Hex(breakpoints[i]));
-      }
+        }
     }
 
     /* verbose output */
-    if((tdb.verbose || tdb.mode == 2) && tdb.mode != 0) {
+    if((tdb.verbose && tdb.enabled && tdb.mode != 0) || 
+        (tdb.verbose && !tdb.enabled) || tdb.mode == 2) {
       printf("%s: ", Int2Hex(pc) +2);
       printf("%s\n", Int2Hex(mem[pc]));
     }
