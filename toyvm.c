@@ -1,4 +1,4 @@
-/* toysim.c - Toy Sim
+/* toyvm.c - ToyVM
 
  * Copyright (C) 2009 -  Aitjcize <aitjcize@gmail.com>
  * All Rights reserved.
@@ -23,6 +23,9 @@
  *         Minor bug fix
  * 0.1.6 - Add input range dectect
  *         Fix opcode '1', '2', '3', '4', '5', '6': constrain range.
+ * 0.2.0 - beta version
+ *         new command line parser
+ *         Add a gdb like debug mode
  */
 
 #include <stdio.h>
@@ -31,22 +34,32 @@
 #include <math.h>
 #include <stdbool.h>
 
-#define PROGRAM_NAME "toysim"
-#define VERSION "0.1.7"
+#define PROGRAM_NAME "toyvm"
+#define VERSION "0.2.0 beta"
 
 #define MAX_CHAR 256
 
 /* flags */
 bool use_external_input = false;
 
+struct _tdb {
+  unsigned int enabled  : 1;
+  unsigned int mode     : 1;                  /* 0: step,  1: running */
+  unsigned int verbose  : 1;
+} tdb;
+
 /* global variables */
 int mem[256];                                   /* memory file */
 int reg[16];                                    /* register file */
 int pc = 16;                                    /* program counter */
 int total_line;                                 /* total line */
+int inp[256];                                   /* input file */
+int total_inp_line;                             /* total input line */
+int inp_index;
 
 /* function prototypes */
 void ReadProg2Mem(char *filename);
+void ReadInput2Mem(char *filename);
 int OpenError(char *filename);
 int Hex2Int(char *str);
 int GetHexBit(int num, int bit);
@@ -55,20 +68,73 @@ int nmask(int n);                   /* mask for right shift negative numbers */
 
 int main(int argc, char *argv[])
 {
-  /* usage: toysim foo.toy bar.input */
+  /* usage: toyvm [-d] foo.toy bar.input */
+  int i, tmp;
   int op, rd, rs, rt, addr;
-  int tmp;
-  char sinput[5];
+  char sinput[5], dinput[32];
   bool do_print = false;
-  //FILE* input;
+  //unsigned int break_points[16];
+  
+  if(argc > 5) {
+    fprintf(stderr, "Usage: toyvm [-d] toyfile [input file]\n");
+    exit(1);
+  }
 
-  if(argc >= 2)
-    ReadProg2Mem(argv[1]);
+  for(i = 1; i < argc; i++) {
+    if(strcmp(argv[i], "-d") == 0) {
+      tdb.enabled = true;
+      printf("ToyVM Debug Mode - ToyVM Ver %s\n", VERSION);
+      printf("Copyright (C) 2009 Aitjcize (Wei-Ning Huang)\n");
+      printf("License GPLv2 <http://gnu.org/licenses/gpl.html>\n\n");
+    }
+    else if(total_line == 0)
+      ReadProg2Mem(argv[i]);
+    else
+      ReadInput2Mem(argv[i]);
+  }
 
-  printf("------ Program Start ------\n");
 
   /* start processing */
   while(true) {
+    while(tdb.enabled && !tdb.mode) {
+      printf("(tdb) ");
+      fgets(dinput, 32, stdin);
+      for(i = 0; i < strlen(dinput); i++)
+        if(dinput[i] == '\n') dinput[i] = 0;
+      if(strlen(dinput) >= 32)
+        while(getchar() != '\n');
+
+      if(strcmp(dinput, "run") == 0 || strcmp(dinput, "r") == 0) {
+        tdb.mode = 1;
+        break;
+      } else if(strcmp(dinput, "step") == 0 || strcmp(dinput, "s") == 0) {
+        tdb.mode = 0;
+        break;
+      } else if(strcmp(dinput, "continue") == 0 || strcmp(dinput, "c") == 0) {
+        tdb.mode = 1;
+        break;
+      } else if(strcmp(dinput, "next") == 0 || strcmp(dinput, "n") == 0) {
+        break;
+      } else if(strcmp(dinput, "verbose") == 0 || strcmp(dinput, "v") == 0) {
+        tdb.verbose = true;
+        break;
+      } else if(strcmp(dinput, "list") == 0 || strcmp(dinput, "l") == 0) {
+        for(i = pc -3 *(pc > 3); i <= pc +2; i++) {
+          /* tohex returns a local static, so we must print it with two lines. */
+          printf("%s: ", tohex(i) +2);
+          printf("%s\n", tohex(mem[i]));
+        }
+      } else if(strcmp(dinput, "reg") == 0) {
+        for(i = 0; i < 16; i++) {
+          printf("R[%c] = %s  ", (i < 10)? i +'0': i -10 +'A', tohex(reg[i]));
+          if(i % 4 == 3) printf("\n");
+        }
+      } else if(strcmp(dinput, "quit") == 0 || strcmp(dinput, "q") == 0) {
+        exit(0);
+      }
+    }
+
+    /* Fetch instructions to IR */
     op = GetHexBit(mem[pc], 3);
     rd = GetHexBit(mem[pc], 2);
     rs = GetHexBit(mem[pc], 1);
@@ -79,8 +145,12 @@ int main(int argc, char *argv[])
     }
     switch(op) {
       case 0:
-        printf("------- Program End -------\n");
-        exit(0);
+        printf("\nProgram exited.\n");
+        if(!tdb.enabled)
+          exit(0);
+        tdb.mode = 0;
+        pc = 16;
+        continue;
       case 1:
         reg[rd] = reg[rs] + reg[rt];
         if(reg[rd] > 32767)
@@ -159,6 +229,10 @@ int main(int argc, char *argv[])
       printf("> %s\n", tohex(mem[255]));
       do_print = false;
     }
+    if(tdb.verbose || tdb.mode == 0) {
+      printf("%s: ", tohex(pc -1) +2);
+      printf("%s\n", tohex(mem[pc -1]));
+    }
   }
 
   return 0;
@@ -172,7 +246,7 @@ int OpenError(char *filename)
 
 void ReadProg2Mem(char *filename)
 {
-  int count = 0, line;
+  int line;
   char buf[MAX_CHAR], tmp[MAX_CHAR];
   FILE* in;
   if((in = fopen(filename, "r")) == NULL)
@@ -188,9 +262,22 @@ void ReadProg2Mem(char *filename)
       exit(1);
     }
     mem[line] = Hex2Int(buf +4);
-    count++;
+    total_line++;
   }
-  total_line = count;
+  fclose(in);
+}
+
+void ReadInput2Mem(char *filename)
+{
+  char buf[MAX_CHAR];
+  FILE* in;
+  if((in = fopen(filename, "r")) == NULL)
+    OpenError(filename);
+  while((fgets(buf, MAX_CHAR, in) != NULL)) {
+    if(buf[0] == '\n') continue;
+    buf[strlen(buf) -1] = 0;
+    inp[total_inp_line++] = Hex2Int(buf);
+  }
   fclose(in);
 }
 
