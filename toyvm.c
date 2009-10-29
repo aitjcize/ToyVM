@@ -26,6 +26,8 @@
  * 0.2.0 - beta version
  *         new command line parser
  *         Add a gdb like debug mode
+ * 0.2.1 - Finish breakpoint implement
+ *         Fix some bugs
  */
 
 #include <stdio.h>
@@ -35,16 +37,19 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.0 beta"
+#define VERSION "0.2.1 beta"
 
 #define MAX_CHAR 256
+
+#define DEBUG           printf("Here\n")
+#define VDEBUG(a, b)    printf(#a ": %" #b "\n", a)
 
 /* flags */
 bool use_external_input = false;
 
 struct _tdb {
   unsigned int enabled  : 1;
-  unsigned int mode     : 1;                  /* 0: step,  1: running */
+  unsigned int mode     : 2;                  /* 0: stopped,  1: running, 2: step*/
   unsigned int verbose  : 1;
 } tdb;
 
@@ -63,17 +68,19 @@ void ReadInput2Mem(char *filename);
 int OpenError(char *filename);
 int Hex2Int(char *str);
 int GetHexBit(int num, int bit);
-char* tohex(int);
+char* Int2Hex(int);
+int YesOrNo(char *message);
 int nmask(int n);                   /* mask for right shift negative numbers */
 
 int main(int argc, char *argv[])
 {
   /* usage: toyvm [-d] foo.toy bar.input */
-  int i, tmp;
+  int i, tmp,
+      b_count = 0;                                  /* count break points */
   int op, rd, rs, rt, addr;
   char sinput[5], dinput[32];
   bool do_print = false;
-  //unsigned int break_points[16];
+  unsigned int breakpoints[16];
   
   if(argc > 5) {
     fprintf(stderr, "Usage: toyvm [-d] toyfile [input file]\n");
@@ -96,7 +103,25 @@ int main(int argc, char *argv[])
 
   /* start processing */
   while(true) {
-    while(tdb.enabled && !tdb.mode) {
+
+    /* check break point then step */
+    if(b_count > 0) {
+      for(i = 0; i < b_count; i++)
+        if(pc == breakpoints[i])
+          break;
+      if(i != b_count) {
+        tdb.mode = 2;
+        printf("Breakpoint %d at %s: 0x%s\n", i +1, "toy", Int2Hex(breakpoints[i]));
+      }
+    }
+
+    /* verbose output */
+    if(tdb.verbose || tdb.mode == 2) {
+      printf("%s: ", Int2Hex(pc) +2);
+      printf("%s\n", Int2Hex(mem[pc]));
+    }
+
+    while(tdb.enabled && tdb.mode != 1) {
       printf("(tdb) ");
       fgets(dinput, 32, stdin);
       for(i = 0; i < strlen(dinput); i++)
@@ -105,28 +130,61 @@ int main(int argc, char *argv[])
         while(getchar() != '\n');
 
       if(strcmp(dinput, "run") == 0 || strcmp(dinput, "r") == 0) {
+        if(tdb.mode == 1) {
+          int res = YesOrNo("The program being debugged has been started already.\nStart it from the beginning? (y or n) ");
+          if(res == 'y') {
+            printf("Starting program: %s\n", "toy");
+            pc = 16;
+            break;
+          }
+        }
+        printf("Starting program: %s\n", "toy");
         tdb.mode = 1;
         break;
       } else if(strcmp(dinput, "step") == 0 || strcmp(dinput, "s") == 0) {
-        tdb.mode = 0;
+        tdb.mode = 2;
         break;
       } else if(strcmp(dinput, "continue") == 0 || strcmp(dinput, "c") == 0) {
         tdb.mode = 1;
         break;
       } else if(strcmp(dinput, "next") == 0 || strcmp(dinput, "n") == 0) {
+        if(pc == 16) {
+          int res = YesOrNo("Program is not running, do you want to run it with step mode? (y or n) ");
+          if(res == 'n') continue;
+          tdb.mode = 2;
+        }
         break;
+      } else if(strncmp(dinput, "break", 5) == 0 || strncmp(dinput, "b", 1) == 0) {
+        char* ch;
+        ch = strtok(dinput, " ");
+        ch = strtok(NULL, " ");
+        if(Hex2Int(ch) > 255)
+          printf("error: no this line.");
+        else {
+          breakpoints[b_count++] = Hex2Int(ch);
+          printf("Breakpoint %d at %s: 0x00%s\n", i +1, "toy", ch);
+        }
+      } else if(strncmp(dinput, "delete", 5) == 0 || strncmp(dinput, "d", 1) == 0) {
+        char* ch;
+        ch = strtok(dinput, " ");
+        ch = strtok(NULL, " ");
+        breakpoints[atoi(ch) -1] = 256;
+      } else if(strcmp(dinput, "info") == 0) {
+        printf("Num    Address\n");
+        for(i = 0; i < b_count; i++)
+          if(breakpoints[i] != 256)
+            printf("%2d     0x%s\n", i +1, Int2Hex(breakpoints[i]));
       } else if(strcmp(dinput, "verbose") == 0 || strcmp(dinput, "v") == 0) {
         tdb.verbose = true;
-        break;
       } else if(strcmp(dinput, "list") == 0 || strcmp(dinput, "l") == 0) {
         for(i = pc -3 *(pc > 3); i <= pc +2; i++) {
-          /* tohex returns a local static, so we must print it with two lines. */
-          printf("%s: ", tohex(i) +2);
-          printf("%s\n", tohex(mem[i]));
+          /* Int2Hex returns a local static, so we must print it with two lines. */
+          printf("%s: ", Int2Hex(i) +2);
+          printf("%s\n", Int2Hex(mem[i]));
         }
       } else if(strcmp(dinput, "reg") == 0) {
         for(i = 0; i < 16; i++) {
-          printf("R[%c] = %s  ", (i < 10)? i +'0': i -10 +'A', tohex(reg[i]));
+          printf("R[%c] = %s  ", (i < 10)? i +'0': i -10 +'A', Int2Hex(reg[i]));
           if(i % 4 == 3) printf("\n");
         }
       } else if(strcmp(dinput, "quit") == 0 || strcmp(dinput, "q") == 0) {
@@ -226,12 +284,8 @@ int main(int argc, char *argv[])
         break;
     }
     if(do_print) {
-      printf("> %s\n", tohex(mem[255]));
+      printf("> %s\n", Int2Hex(mem[255]));
       do_print = false;
-    }
-    if(tdb.verbose || tdb.mode == 0) {
-      printf("%s: ", tohex(pc -1) +2);
-      printf("%s\n", tohex(mem[pc -1]));
     }
   }
 
@@ -304,7 +358,7 @@ int GetHexBit(int num, int bit)
   return bits[bit];
 }
 
-char* tohex(int num)
+char* Int2Hex(int num)
 {
   static char bits[5] = { 0 };
   char tmp;
@@ -334,4 +388,15 @@ int nmask(int n)                 /* mask for right shift negative numbers */
   for(i = 15; i >= 16 -n; i--)
     sum += pow(2, i);
   return sum;
+}
+
+int YesOrNo(char *message)
+{
+  char ch = 0;
+  while(ch != 'y' && ch != 'n') {
+    printf("%s", message);
+    ch = getchar();
+    if (ch != '\n') while(getchar() != '\n');
+  }
+  return ch;
 }
