@@ -31,6 +31,9 @@
  * 0.2.2 - Implement input file feature
  *         Check every input hex range
  *         Add help list, version info
+ * 0.2.3 - Add breakpoint range check
+ *         Minor bug fixed.
+ *         Stable release.
  */
 
 #include <stdio.h>
@@ -40,9 +43,10 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.2 beta"
+#define VERSION "0.2.3"
 
 #define MAX_CHAR 256
+#define BREAK_MAX 16
 
 #define DEBUG           printf("Here\n")
 #define VDEBUG(a, b)    printf(#a ": %" #b "\n", a)
@@ -72,6 +76,7 @@ int OpenError(char *filename);
 int Hex2Int(char *str);
 int GetHexBit(int num, int bit);
 char* Int2Hex(int);
+char* Get2ndArg(char* string);
 int YesOrNo(char *message);
 int nmask(int n);                   /* mask for right shift negative numbers */
 void usage(void);
@@ -85,7 +90,7 @@ int main(int argc, char *argv[])
   int op, rd, rs, rt, addr;
   char sinput[5], dinput[32];
   bool do_print = false;
-  unsigned int breakpoints[16];
+  unsigned int breakpoints[BREAK_MAX];
   
   if(argc > 5) {
     fprintf(stderr, "Usage: toyvm [-d] toyfile [input file]\n");
@@ -184,21 +189,39 @@ int main(int argc, char *argv[])
         }
         break;
       } else if(strncmp(dinput, "break", 5) == 0 || strncmp(dinput, "b", 1) == 0) {
-        char* ch;
-        ch = strtok(dinput, " ");
-        ch = strtok(NULL, " ");
+        char* ch = Get2ndArg(dinput);
+        if(ch == NULL) {
+          fprintf(stderr, "error: invalid breakpoint.\n");
+          continue;
+        }
         tmp = Hex2Int(ch);
-        if(tmp > 255 || tmp == -1)
-          fprintf(stderr, "error: no this line.");
-        else {
+        if(tmp > 255 || tmp == -1) {
+          fprintf(stderr, "error: no this line.\n");
+          continue;
+        }
+        if(b_count == BREAK_MAX) {          /* breakpoint is full, check from the beginning */
+          for(i = 0; i < BREAK_MAX; i++)
+            if(breakpoints[i] == 256) {
+              breakpoints[i] = tmp;
+              printf("Breakpoint %d at %s: 0x00%s\n", i +1, toyfile, ch);
+              break;
+            }
+          if(i == BREAK_MAX)
+            printf("error: all available breakpoints are used, please delete some.\n");
+        } else {
           breakpoints[b_count++] = tmp;
           printf("Breakpoint %d at %s: 0x00%s\n", b_count, toyfile, ch);
         }
       } else if(strncmp(dinput, "delete", 5) == 0 || strncmp(dinput, "d", 1) == 0) {
-        char* ch;
-        ch = strtok(dinput, " ");
-        ch = strtok(NULL, " ");
-        breakpoints[atoi(ch) -1] = 256;
+        char* ch = Get2ndArg(dinput);
+        if(ch == NULL) {
+          fprintf(stderr, "error: invalid breakpoint.\n");
+          continue;
+        } else if(atoi(ch) > BREAK_MAX) {
+          fprintf(stderr, "error: max breakpoint is %d.\n", BREAK_MAX);
+          continue;
+        }
+        breakpoints[atoi(ch) -1] = 256;         /* set to 256 to delete the breakpoint */
       } else if(strcmp(dinput, "info") == 0) {
         printf("Num    Address\n");
         for(i = 0; i < b_count; i++)
@@ -210,9 +233,7 @@ int main(int argc, char *argv[])
         tdb.verbose = false;
       } else if(strncmp(dinput, "list", 4) == 0 || strncmp(dinput, "l", 1) == 0) {
         int id = pc;
-        char* ch;
-        ch = strtok(dinput, " ");
-        ch = strtok(NULL, " ");
+        char* ch = Get2ndArg(dinput);
         if(ch != NULL) tmp = Hex2Int(ch);
         if(ch != NULL && tmp > 0 && tmp < 256) id = tmp;
         for(i = id -5 *(id > 5); i <= id +4; i++) {
@@ -425,6 +446,12 @@ char* Int2Hex(int num)
     bits[3 -i] = tmp;
   }
   return bits;
+}
+
+char* Get2ndArg(char* string)
+{
+  strtok(string, " ");
+  return strtok(NULL, " ");
 }
 
 int nmask(int n)                 /* mask for right shift negative numbers */
