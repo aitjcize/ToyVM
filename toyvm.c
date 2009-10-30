@@ -248,14 +248,12 @@ int main(int argc, char *argv[])
         pc = 16;
         continue;
       case 1:
-        reg[rd] = reg[rs] + reg[rt];
-        if(reg[rd] > 32767)
-          reg[rd] = -32768 + (reg[rd] +32768) % 65536;
+        reg[rd] = (reg[rs] + reg[rt]) %65536;
         break;
       case 2:
         reg[rd] = reg[rs] - reg[rt];
-        if(reg[rd] < -32768)
-          reg[rd] = 32768 + (reg[rd] -32768) % 65536;
+        if(reg[rd] < 0)
+          reg[rd] = reg[rd] +65536;
         break;
       case 3:
         reg[rd] = reg[rs] & reg[rt];
@@ -264,9 +262,7 @@ int main(int argc, char *argv[])
         reg[rd] = reg[rs] ^ reg[rt];
         break;
       case 5:
-        reg[rd] = reg[rs] << reg[rt];
-        if(reg[rd] > 32767)
-          reg[rd] = -32768 + (reg[rd] +32768) % 65536;
+        reg[rd] = (reg[rs] << reg[rt]) %65536;
         break;
       case 6:
         tmp = reg[rs] >> reg[rt];
@@ -314,7 +310,7 @@ int main(int argc, char *argv[])
         if(reg[rd] == 0) pc = addr;
         break;
       case 13:
-        if(reg[rd] > 0) pc = addr;
+        if(reg[rd] < 32768) pc = addr;
         break;
       case 14:
         pc = reg[rd];
@@ -423,8 +419,7 @@ char* Int2Hex(int num)
   }
   for(i = 0; i < 4 -count; i++)
     bits[count +i] = '0';
-  for(i = 0; i < 2; i++)
-  {
+  for(i = 0; i < 2; i++) {
     tmp = bits[i];
     bits[i] = bits[3 -i];
     bits[3 -i] = tmp;
