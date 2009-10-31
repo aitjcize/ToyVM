@@ -17,24 +17,25 @@
  *
  * --------------------------------------------------------------------
  * Change Log:
- * 0.1.0 - First Release
- * 0.1.5 - Fix opcode '1' overflow
- *         Fix opcode 'E' pc <- R[t] to pc <- R[d]
- *         Minor bug fix
- * 0.1.6 - Add input range dectect
- *         Fix opcode '1', '2', '3', '4', '5', '6': constrain range.
- * 0.2.0 - Beta version
- *         New command line parser
- *         Add a gdb like debug mode
- * 0.2.1 - Finish breakpoint implement
- *         Fix some bugs
- * 0.2.2 - Implement input file feature
- *         Check every input hex range
- *         Add help list, version info
- * 0.2.3 - Add breakpoint range check
- *         Minor bug fixed.
- *         Stable release.
- * 0.2.4 - Modulize some part in main to gain readibility.
+ * 0.1.0   - First Release
+ * 0.1.5   - Fix opcode '1' overflow
+ *           Fix opcode 'E' pc <- R[t] to pc <- R[d]
+ *           Minor bug fix
+ * 0.1.6   - Add input range dectect
+ *           Fix opcode '1', '2', '3', '4', '5', '6': constrain range.
+ * 0.2.0   - Beta version
+ *           New command line parser
+ *           Add a gdb like debug mode
+ * 0.2.1   - Finish breakpoint implement
+ *           Fix some bugs
+ * 0.2.2   - Implement input file feature
+ *           Check every input hex range
+ *           Add help list, version info
+ * 0.2.3   - Add breakpoint range check
+ *           Minor bug fixed.
+ *           Stable release.
+ * 0.2.4   - Modulize some part in main to gain readibility.
+ * 0.2.4.1 - Fix opcode 'D'.
  */
 
 #include <stdio.h>
@@ -44,7 +45,7 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.4"
+#define VERSION "0.2.4.1"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
@@ -202,7 +203,7 @@ int main(int argc, char *argv[])
         if(reg[rd] == 0) pc = addr;
         break;
       case 13:
-        if(reg[rd] < 32768) pc = addr;
+        if(reg[rd] > 0 && reg[rd] < 32768) pc = addr;
         break;
       case 14:
         pc = reg[rd];
@@ -263,6 +264,7 @@ void ParseArgs(int argc, char** argv)
     exit(1);
   }
 }
+
 int TdbLoop(int *b_count, unsigned int* breakpoints)
 {
   int i, tmp;
