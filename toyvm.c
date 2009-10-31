@@ -4,8 +4,8 @@
  * All Rights reserved.
  *
  * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License version 2 as published by the Free Software Foundation.
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -36,6 +36,7 @@
  *           Stable release.
  * 0.2.4   - Modulize some part in main to gain readibility.
  * 0.2.4.1 - Fix opcode 'D'.
+ * 0.2.4.2 - clear register in reset()
  */
 
 #include <stdio.h>
@@ -45,7 +46,7 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.4.1"
+#define VERSION "0.2.4.2"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
@@ -479,9 +480,12 @@ char* Get2ndArg(char* string)
 
 void reset(int mode)
 {
+  int i;
   tdb.mode = mode;
   pc = 16;
   inp_index = 0;
+  for(i = 0; i < 16; i++)
+    reg[i] = 0;
 }
 
 int nmask(int n)                 /* mask for right shift negative numbers */
