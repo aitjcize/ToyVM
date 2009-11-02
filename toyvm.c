@@ -37,6 +37,7 @@
  * 0.2.4   - Modulize some part in main to gain readibility.
  * 0.2.4.1 - Fix opcode 'D'.
  * 0.2.4.2 - clear register in reset()
+ * 0.2.5   - Add Function `FineInput', since it's stable, 0.2.5 will be stable release.
  */
 
 #include <stdio.h>
@@ -46,13 +47,10 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.4.2"
+#define VERSION "0.2.5"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
-
-#define DEBUG           printf("Here\n")
-#define VDEBUG(a, b)    printf(#a ": %" #b "\n", a)
 
 /* flags */
 bool use_external_input = false;
@@ -84,6 +82,7 @@ char* Int2Hex(int);
 char* Get2ndArg(char* string);
 void reset(int mode);
 int YesOrNo(char *message);
+void FineInput(char* buf, int size);
 int nmask(int n);                   /* mask for right shift negative numbers */
 void usage(void);
 
@@ -176,15 +175,11 @@ int main(int argc, char *argv[])
               printf("error: no more input data, please input manually.\n");
           }
           do {
-            int i;
             printf("] ");
-            fgets(sinput, 5, stdin);
-            for(i = 0; i < strlen(sinput); i++)
-              if(sinput[i] == '\n') sinput[i] = 0;
+            FineInput(sinput, 5);
             tmp = Hex2Int(sinput);
             if(tmp > 65535 || tmp == -1)
               fprintf(stderr, "error: wrong range, please reenter.\n");
-            if(strlen(sinput) >= 4) while(getchar() != '\n');
           } while(tmp > 65535 || tmp == -1);
           reg[rd] = tmp;
         } else
@@ -195,9 +190,17 @@ int main(int argc, char *argv[])
         mem[addr] = reg[rd];
         break;
       case 10:
+        if(reg[rt] < 0 || reg[rt] > 256) {
+          printf("error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
+          exit(1);
+        }
         reg[rd] = mem[reg[rt]];
         break;
       case 11:
+        if(reg[rt] < 0 || reg[rt] > 256) {
+          printf("error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
+          exit(1);
+        }
         mem[reg[rt]] = reg[rd];
         break;
       case 12:
@@ -233,14 +236,14 @@ void ParseArgs(int argc, char** argv)
   for(i = 1; i < argc; i++) {
     if(strcmp(argv[i], "-d") == 0) {
       tdb.enabled = true;
-      printf("ToyVM Debug Mode - ToyVM Ver %s\n", VERSION);
+      printf("ToyVM Debug Mode - ToyVM Ver. %s\n", VERSION);
       printf("Copyright (C) 2009 Aitjcize (Wei-Ning Huang)\n");
       printf("License GPLv2 <http://gnu.org/licenses/gpl.html>\n\n");
     }
     else if(strcmp(argv[i], "-v") == 0)
       tdb.verbose = true;
     else if(strcmp(argv[i], "--version") == 0) {
-      printf("ToyVM Ver %s\n", VERSION);
+      printf("ToyVM Ver. %s\n", VERSION);
       printf("Copyright (C) 2009 Aitjcize (Wei-Ning Huang)\n");
       printf("License GPLv2 <http://gnu.org/licenses/gpl.html>\n");
       printf("This is free software: you are free to change and redistribute it.\n");
@@ -273,11 +276,7 @@ int TdbLoop(int *b_count, unsigned int* breakpoints)
 
   while(tdb.enabled && tdb.mode != 1) {
     printf("(tdb) ");
-    fgets(dinput, 32, stdin);
-    for(i = 0; i < strlen(dinput); i++)
-      if(dinput[i] == '\n') dinput[i] = 0;
-    if(strlen(dinput) >= 32)
-      while(getchar() != '\n');
+    FineInput(dinput, 32);
 
     if(strcmp(dinput, "run") == 0 || strcmp(dinput, "r") == 0) {
       if(tdb.mode == 2) {
@@ -507,6 +506,15 @@ int YesOrNo(char *message)
   return ch;
 }
 
+void FineInput(char* buf, int size) 
+{  
+  int i; 
+  fgets(buf, size, stdin);
+  for(i = 0; i < strlen(buf); i++)
+    if(buf[i] == '\n') buf[i] = 0;
+  if(strlen(buf) >= size -1) while(getchar() != '\n');
+}
+
 void usage(void)
 {
   printf("Usage: toyvm [-d] [-v] ToyFile [InputFile]\n");
@@ -524,11 +532,11 @@ void usage(void)
   printf("    next, n       Execute next program line (after stopping).\n");
   printf("    continue, c   Continue  running your program (after stopping, e.g. at a\n");
   printf("                  break point).\n");
-  printf("    break [line]  Set a breakpoint, program will pause at break point.\n");
+  printf("    break [LINE]  Set a breakpoint, program will pause at break point.\n");
   printf("    info          Show breakpoint information.\n");
-  printf("    delete [num]  Delete a breakpoint, num can be found by the `info' command.\n");
+  printf("    delete [NUM]  Delete a breakpoint, NUM can be found by the `info' command.\n");
   printf("    reg           Show register data.\n");
-  printf("    list [line]   list ten lines around line.\n");
+  printf("    list [LINE]   List memory file. List ten lines around LINE.\n");
   printf("    verbose, v    Verbose mode, every instruction is shown before executing.\n");
   printf("    noverbose, nv Disable verbose mode.\n");
   printf("    quit, q       Quit toyvm debuger.\n\n");
