@@ -38,6 +38,8 @@
  * 0.2.4.1 - Fix opcode 'D'.
  * 0.2.4.2 - clear register in reset()
  * 0.2.5   - Add Function `FineInput', since it's stable, 0.2.5 will be stable release.
+ * 0.2.6   - Add ListMem, enable A..B to specified list range.
+ *           Add help to TdbLoop
  */
 
 #include <stdio.h>
@@ -47,7 +49,7 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.5"
+#define VERSION "0.2.6"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
@@ -80,12 +82,13 @@ int Hex2Int(char *str);
 int GetHexBit(int num, int bit);
 char* Int2Hex(int);
 char* Get2ndArg(char* string);
+void ListMem(char *string);
 void reset(int mode);
 int YesOrNo(char *message);
 void FineInput(char* buf, int size);
 int nmask(int n);                   /* mask for right shift negative numbers */
 void lexit(int n);
-void usage(void);
+void usage(int n);
 
 int main(int argc, char *argv[])
 {
@@ -95,7 +98,7 @@ int main(int argc, char *argv[])
   char sinput[5];
   unsigned int breakpoints[BREAK_MAX];          /* store break points */
   bool do_print = false;
-  
+
   ParseArgs(argc, argv);
 
   /* start processing */
@@ -173,7 +176,7 @@ int main(int argc, char *argv[])
               continue;
             }
             else
-              printf("error: no more input data, please input manually.\n");
+              fprintf(stderr, "error: no more input data, please input manually.\n");
           }
           do {
             printf("] ");
@@ -192,14 +195,14 @@ int main(int argc, char *argv[])
         break;
       case 10:
         if(reg[rt] < 0 || reg[rt] > 256) {
-          printf("error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
+          fprintf(stderr, "error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
           lexit(1);
         }
         reg[rd] = mem[reg[rt]];
         break;
       case 11:
         if(reg[rt] < 0 || reg[rt] > 256) {
-          printf("error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
+          fprintf(stderr, "error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
           lexit(1);
         }
         mem[reg[rt]] = reg[rd];
@@ -253,7 +256,7 @@ void ParseArgs(int argc, char** argv)
       lexit(0);
     }
     else if(strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0)
-      usage();
+      usage(0);
     else if(total_line == 0) {
       total_line = ReadProg2Mem(argv[i]);
       toyfile = argv[i];
@@ -324,7 +327,7 @@ int TdbLoop(int *b_count, unsigned int* breakpoints)
             break;
           }
         if(i == BREAK_MAX)
-          printf("error: all available breakpoints are used, please delete some.\n");
+          fprintf(stderr, "error: all available breakpoints are used, please delete some.\n");
       } else {
         breakpoints[(*b_count)++] = tmp;
         printf("Breakpoint %d at %s: 0x00%s\n", *b_count, toyfile, ch);
@@ -349,20 +352,18 @@ int TdbLoop(int *b_count, unsigned int* breakpoints)
     } else if(strcmp(dinput, "noverbose") == 0 || strcmp(dinput, "nv") == 0) {
       tdb.verbose = false;
     } else if(strncmp(dinput, "list", 4) == 0 || strncmp(dinput, "l", 1) == 0) {
-      int id = pc;
       char* ch = Get2ndArg(dinput);
-      if(ch != NULL) tmp = Hex2Int(ch);
-      if(ch != NULL && tmp > 0 && tmp < 256) id = tmp;
-      for(i = id -5 *(id > 5); i <= id +4; i++) {
-        /* Int2Hex returns a local static, so we must print it with two lines. */
-        printf("%s: ", Int2Hex(i) +2);
-        printf("%s\n", Int2Hex(mem[i]));
-      }
+      if(ch != NULL)
+        ListMem(ch);
+      else
+        ListMem(Int2Hex(pc));
     } else if(strcmp(dinput, "reg") == 0) {
       for(i = 0; i < 16; i++) {
         printf("R[%c] = %s  ", (i < 10)? i +'0': i -10 +'A', Int2Hex(reg[i]));
         if(i % 4 == 3) printf("\n");
       }
+    } else if(strcmp(dinput, "help") == 0 || strcmp(dinput, "h") == 0) {
+      usage(1);
     } else if(strcmp(dinput, "quit") == 0 || strcmp(dinput, "q") == 0) {
       lexit(0);
     }
@@ -426,11 +427,11 @@ int Hex2Int(char *str)
   int i, sum = 0;
   for(i = 0; i < strlen(str); i++) {
     if((str[i] >= '0' && str[i] <= '9') || (str[i] >= 'a' &&
-        str[i] <= 'f') || (str[i] >= 'A' && str[i] <= 'F')) {
-    if(str[i] >= 'a' || str[i] >= 'A')         /* a to f */
-      sum += (str[i] -(str[i] >= 'a'? 'a': 'A') +10) *pow(16, strlen(str) -i -1);
-    else
-      sum += (str[i] -'0') *pow(16, strlen(str) -i -1);
+          str[i] <= 'f') || (str[i] >= 'A' && str[i] <= 'F')) {
+      if(str[i] >= 'a' || str[i] >= 'A')         /* a to f */
+        sum += (str[i] -(str[i] >= 'a'? 'a': 'A') +10) *pow(16, strlen(str) -i -1);
+      else
+        sum += (str[i] -'0') *pow(16, strlen(str) -i -1);
     }
     else
       return -1;
@@ -494,6 +495,32 @@ void reset(int mode)
   ReadProg2Mem(toyfile);
 }
 
+void ListMem(char *string)
+{
+  int a, b, i, two = false;
+  for(i = 0; i < strlen(string) -2; i++)
+    if(strncmp(string +i, "..", 2) == 0)
+      two = true;
+  if(two) {
+    a = Hex2Int(strtok(string, "."));
+    b = Hex2Int(strtok(NULL, "."));
+  }
+  else {
+    a = Hex2Int(string) -6;
+    b  = a + 12;
+    if(a < 6) a = 0;
+    if(b > 256) b = 256;
+  }
+  if(a == -1 || b == -1 || a > 256 || b > 256) {
+    fprintf(stderr, "error: invalid line.\n");
+    return;
+  }
+  for(i = a; i <= b; i++) {
+    printf("%s: ", Int2Hex(i));
+    printf("%s\n", Int2Hex(mem[i]));
+  }
+}
+
 int nmask(int n)                 /* mask for right shift negative numbers */
 {
   int i, sum = 0;
@@ -530,17 +557,19 @@ void lexit(int n)
   exit(n);
 }
 
-void usage(void)
+void usage(int n)
 {
-  printf("Usage: toyvm [-d] [-v] ToyFile [InputFile]\n");
-  printf("       toyvm [--version| -h| --help]\n\n");
-  printf("NORMAL MODE\n");
-  printf("    -d            Enter Debug Mode\n");
-  printf("    -v            Verbose mode\n");
-  printf("    ToyFile       *.toy file you want to run.\n");
-  printf("    InputFile     This is optional, using InputFile instead of manually input.\n");
-  printf("    -h, --help    Show this help list.\n");
-  printf("    --version     Show version.\n\n");
+  if(n == 0) {
+    printf("Usage: toyvm [-d] [-v] ToyFile [InputFile]\n");
+    printf("       toyvm [--version| -h| --help]\n\n");
+    printf("NORMAL MODE\n");
+    printf("    -d            Enter Debug Mode\n");
+    printf("    -v            Verbose mode\n");
+    printf("    ToyFile       *.toy file you want to run.\n");
+    printf("    InputFile     This is optional, using InputFile instead of manually input.\n");
+    printf("    -h, --help    Show this help list.\n");
+    printf("    --version     Show version.\n\n");
+  }
   printf("DEBUG MODE\n");
   printf("    run, r        Run program\n");
   printf("    step, s       Run program in step mode, each line is shown before executing.\n");
@@ -551,10 +580,13 @@ void usage(void)
   printf("    info          Show breakpoint information.\n");
   printf("    delete [NUM]  Delete a breakpoint, NUM can be found by the `info' command.\n");
   printf("    reg           Show register data.\n");
-  printf("    list [LINE]   List memory file. List ten lines around LINE.\n");
+  printf("    list [FMT]    List memory file. FMT can be a line or a range. If a line\n");
+  printf("                  entered, list will show 13 line around it. If a ragne like\n");
+  printf("                  A..B is entered, list will show lines from A to B.\n");
   printf("    verbose, v    Verbose mode, every instruction is shown before executing.\n");
   printf("    noverbose, nv Disable verbose mode.\n");
   printf("    quit, q       Quit toyvm debuger.\n\n");
+  if(n == 1) return;
   printf("Please report bugs to Aitjcize <aitjcize@gmail.com>\n");
   lexit(0);
 }
