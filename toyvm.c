@@ -75,7 +75,7 @@ void ParseArgs(int argc, char** argv);
 int TdbLoop(int* b_count, unsigned int* breakpoints);
 int ReadProg2Mem(char *filename);
 int ReadInput2Mem(char *filename);
-int OpenError(char *filename);
+void OpenError(char *filename);
 int Hex2Int(char *str);
 int GetHexBit(int num, int bit);
 char* Int2Hex(int);
@@ -84,6 +84,7 @@ void reset(int mode);
 int YesOrNo(char *message);
 void FineInput(char* buf, int size);
 int nmask(int n);                   /* mask for right shift negative numbers */
+void lexit(int n);
 void usage(void);
 
 int main(int argc, char *argv[])
@@ -132,7 +133,7 @@ int main(int argc, char *argv[])
       case 0:
         printf("\nProgram exited.\n");
         if(!tdb.enabled)
-          exit(0);
+          lexit(0);
         reset(0);
         continue;
       case 1:
@@ -192,14 +193,14 @@ int main(int argc, char *argv[])
       case 10:
         if(reg[rt] < 0 || reg[rt] > 256) {
           printf("error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
-          exit(1);
+          lexit(1);
         }
         reg[rd] = mem[reg[rt]];
         break;
       case 11:
         if(reg[rt] < 0 || reg[rt] > 256) {
           printf("error: illegal address `%s', abort.\n", Int2Hex(reg[rt]));
-          exit(1);
+          lexit(1);
         }
         mem[reg[rt]] = reg[rd];
         break;
@@ -230,7 +231,7 @@ void ParseArgs(int argc, char** argv)
   int total_line = 0, i;
   if(argc > 5) {
     fprintf(stderr, "Usage: toyvm [-d] [-v] toyfile [input file]\n");
-    exit(1);
+    lexit(1);
   }
 
   for(i = 1; i < argc; i++) {
@@ -249,7 +250,7 @@ void ParseArgs(int argc, char** argv)
       printf("This is free software: you are free to change and redistribute it.\n");
       printf("There is NO WARRANTY, to the extent permitted by law.\n\n");
       printf("Written by Aitjcize (Wei-Ning Huang).\n");
-      exit(0);
+      lexit(0);
     }
     else if(strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0)
       usage();
@@ -265,7 +266,7 @@ void ParseArgs(int argc, char** argv)
 
   if(toyfile == NULL) {
     fprintf(stderr, "error: no input file.\n");
-    exit(1);
+    lexit(1);
   }
 }
 
@@ -363,16 +364,16 @@ int TdbLoop(int *b_count, unsigned int* breakpoints)
         if(i % 4 == 3) printf("\n");
       }
     } else if(strcmp(dinput, "quit") == 0 || strcmp(dinput, "q") == 0) {
-      exit(0);
+      lexit(0);
     }
   }
   return 0;
 }
 
-int OpenError(char *filename)
+void OpenError(char *filename)
 {
   fprintf(stderr, "error: can't open `%s'.\n", filename);
-  exit(1);
+  lexit(1);
 }
 
 
@@ -391,12 +392,12 @@ int ReadProg2Mem(char *filename)
     line = Hex2Int(tmp);
     if(line > 255 || line == -1) {
       fprintf(stderr, "error: invalid line - %d.\n", line);
-      exit(1);
+      lexit(1);
     }
     mem[line] = Hex2Int(buf +4);
     if(mem[line] == -1) {
       fprintf(stderr, "error: wrong instruction in line %d, abort.\n", line);
-      exit(1);
+      lexit(1);
     }
     total_line++;
   }
@@ -515,6 +516,14 @@ void FineInput(char* buf, int size)
   if(strlen(buf) >= size -1) while(getchar() != '\n');
 }
 
+void lexit(int n)
+{
+#ifdef WIN32
+  system("pause");
+#endif
+  exit(n);
+}
+
 void usage(void)
 {
   printf("Usage: toyvm [-d] [-v] ToyFile [InputFile]\n");
@@ -541,5 +550,5 @@ void usage(void)
   printf("    noverbose, nv Disable verbose mode.\n");
   printf("    quit, q       Quit toyvm debuger.\n\n");
   printf("Please report bugs to Aitjcize <aitjcize@gmail.com>\n");
-  exit(0);
+  lexit(0);
 }
