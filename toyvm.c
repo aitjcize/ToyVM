@@ -484,8 +484,14 @@ void reset(int mode)
   tdb.mode = mode;
   pc = 16;
   inp_index = 0;
+  /* clear register */
   for(i = 0; i < 16; i++)
     reg[i] = 0;
+  /* clear memory */
+  for(i = 0; i < 256; i++)
+    mem[i] = 0;
+  /* reload program */
+  ReadProg2Mem(toyfile);
 }
 
 int nmask(int n)                 /* mask for right shift negative numbers */
