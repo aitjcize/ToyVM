@@ -6,7 +6,6 @@ toyvm: $(objects)
 
 install:
 	mkdir /usr/share/toyvm
-	cp -rf ../examples /usr/share/toyvm
 	cp -f toyvm /usr/bin
 clean:
 	rm -rf toyvm $(objects)
