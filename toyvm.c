@@ -79,7 +79,6 @@ int ReadProg2Mem(char *filename);
 int ReadInput2Mem(char *filename);
 void OpenError(char *filename);
 int Hex2Int(char *str);
-int GetHexBit(int num, int bit);
 char* Int2Hex(int);
 char* Get2ndArg(char* string);
 void ListMem(char *string);
@@ -94,7 +93,7 @@ int main(int argc, char *argv[])
 {
   int b_count = 0;                              /* count break points */
   int op, rd, rs, rt, addr;
-  int i, tmp;
+  int i, tmp, insc;
   char sinput[5];
   unsigned int breakpoints[BREAK_MAX];          /* store break points */
   bool do_print = false;
@@ -124,14 +123,14 @@ int main(int argc, char *argv[])
     TdbLoop(&b_count, breakpoints);
 
     /* Fetch instructions to IR */
-    op = GetHexBit(mem[pc], 3);
-    rd = GetHexBit(mem[pc], 2);
-    rs = GetHexBit(mem[pc], 1);
-    rt = GetHexBit(mem[pc], 0);
+    insc = mem[pc];
+    op   = (insc >> 12) & 0xF;
+    rd   = (insc >>  8) & 0xF;
+    rs   = (insc >>  4) & 0xF;
+    rt   = (insc >>  0) & 0xF;
+    addr = (insc >>  0) & 0xFF;
     pc++;
-    if((op >= 7 && op <= 9) || op == 12 || op == 13 || op == 15) {/* format 2 */
-      addr = rs *16 + rt;
-    }
+
     switch(op) {
       case 0:
         printf("\nProgram exited.\n");
@@ -437,17 +436,6 @@ int Hex2Int(char *str)
       return -1;
   }
   return sum;
-}
-
-int GetHexBit(int num, int bit)
-{
-  int bits[4] = { 0 };
-  int count = 0;
-  while(num) {
-    bits[count++] = num % 16;
-    num /= 16;
-  }
-  return bits[bit];
 }
 
 char* Int2Hex(int num)
