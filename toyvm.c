@@ -40,6 +40,7 @@
  * 0.2.5   - Add Function `FineInput', since it's stable, 0.2.5 will be stable release.
  * 0.2.6   - Add ListMem, enable A..B to specified list range.
  *           Add help to TdbLoop
+ * 0.2.6.1 - Add cycle count.
  */
 
 #include <stdio.h>
@@ -49,7 +50,7 @@
 #include <stdbool.h>
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.6"
+#define VERSION "0.2.6.1"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
@@ -71,6 +72,7 @@ int total_inp_line;                             /* total input line */
 int inp_index = 0;                              /* index for input line */
 int pc = 16;                                    /* program counter */
 char* toyfile = NULL;                           /* point to file name */
+int cycle = 0;                                  /* total cycle */
 
 /* function prototypes */
 void ParseArgs(int argc, char** argv);
@@ -133,7 +135,7 @@ int main(int argc, char *argv[])
 
     switch(op) {
       case 0:
-        printf("\nProgram exited.\n");
+        printf("\nProgram exited. Total cycles: %d.\n", cycle);
         if(!tdb.enabled)
           lexit(0);
         reset(0);
@@ -224,6 +226,7 @@ int main(int argc, char *argv[])
       printf("> %s\n", Int2Hex(mem[255]));
       do_print = false;
     }
+    cycle++;
   }
   return 0;
 }
@@ -471,6 +474,7 @@ void reset(int mode)
 {
   int i;
   tdb.mode = mode;
+  cycle = 0;
   pc = 16;
   inp_index = 0;
   /* clear register */
