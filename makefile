@@ -5,7 +5,6 @@ toyvm: $(objects)
 	cc -o toyvm $(objects) $(FLAGS)
 
 install:
-	mkdir /usr/share/toyvm
 	cp -f toyvm /usr/bin
 clean:
 	rm -rf toyvm $(objects)

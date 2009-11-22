@@ -41,6 +41,8 @@
  * 0.2.6   - Add ListMem, enable A..B to specified list range.
  *           Add help to TdbLoop
  * 0.2.6.1 - Add cycle count.
+ * --------------------------------------------------------------------
+ * Project temporarily close.
  */
 
 #include <stdio.h>
@@ -572,7 +574,7 @@ void usage(int n)
   printf("    info          Show breakpoint information.\n");
   printf("    delete [NUM]  Delete a breakpoint, NUM can be found by the `info' command.\n");
   printf("    reg           Show register data.\n");
-  printf("    list [FMT]    List memory file. FMT can be a line or a range. If a line\n");
+  printf("    list [FMT]    List memory file. FMT can be a line or a range. If a line is\n");
   printf("                  entered, list will show 13 line around it. If a ragne like\n");
   printf("                  A..B is entered, list will show lines from A to B.\n");
   printf("    verbose, v    Verbose mode, every instruction is shown before executing.\n");
