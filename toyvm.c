@@ -52,7 +52,7 @@
 
 
 #define PROGRAM_NAME "toyvm"
-#define VERSION "0.2.6.1"
+#define VERSION "0.2.7"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
