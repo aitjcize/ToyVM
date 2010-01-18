@@ -41,8 +41,7 @@
  * 0.2.6   - Add ListMem, enable A..B to specified list range.
  *           Add help to TdbLoop
  * 0.2.6.1 - Add cycle count.
- * --------------------------------------------------------------------
- * Project temporarily close.
+ * 0.2.7.0 - Add functionality: disassemble
  */
 
 #include <stdio.h>
@@ -50,6 +49,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdbool.h>
+
 
 #define PROGRAM_NAME "toyvm"
 #define VERSION "0.2.6.1"
@@ -71,6 +71,7 @@ int mem[256];                                   /* memory file */
 int reg[16];                                    /* register file */
 int inp[256];                                   /* input file */
 int total_inp_line;                             /* total input line */
+int total_line;                                 /* total file length */
 int inp_index = 0;                              /* index for input line */
 int pc = 16;                                    /* program counter */
 char* toyfile = NULL;                           /* point to file name */
@@ -86,6 +87,7 @@ int Hex2Int(char *str);
 char* Int2Hex(int);
 char* Get2ndArg(char* string);
 void ListMem(char *string);
+void Disasm(char * string);
 void reset(int mode);
 int YesOrNo(char *message);
 void FineInput(char* buf, int size);
@@ -235,7 +237,7 @@ int main(int argc, char *argv[])
 
 void ParseArgs(int argc, char** argv)
 {
-  int total_line = 0, i;
+  int i;
   if(argc > 5) {
     fprintf(stderr, "Usage: toyvm [-d] [-v] toyfile [input file]\n");
     lexit(1);
@@ -336,7 +338,7 @@ int TdbLoop(int *b_count, unsigned int* breakpoints)
         breakpoints[(*b_count)++] = tmp;
         printf("Breakpoint %d at %s: 0x00%s\n", *b_count, toyfile, ch);
       }
-    } else if(strncmp(dinput, "delete", 5) == 0 || strncmp(dinput, "d", 1) == 0) {
+    } else if(strncmp(dinput, "delete", 5) == 0 || strncmp(dinput, "d ", 2) == 0) {
       char* ch = Get2ndArg(dinput);
       if(ch == NULL) {
         fprintf(stderr, "error: invalid breakpoint.\n");
@@ -366,6 +368,12 @@ int TdbLoop(int *b_count, unsigned int* breakpoints)
         printf("R[%c] = %s  ", (i < 10)? i +'0': i -10 +'A', Int2Hex(reg[i]));
         if(i % 4 == 3) printf("\n");
       }
+    } else if(strncmp(dinput, "disasm", 6) == 0) {
+      char* ch = Get2ndArg(dinput);
+      if(ch != NULL)
+        Disasm(ch);
+      else
+        Disasm(Int2Hex(pc));
     } else if(strcmp(dinput, "help") == 0 || strcmp(dinput, "h") == 0) {
       usage(1);
     } else if(strcmp(dinput, "quit") == 0 || strcmp(dinput, "q") == 0) {
@@ -384,7 +392,7 @@ void OpenError(char *filename)
 
 int ReadProg2Mem(char *filename)
 {
-  int line, total_line = 0;
+  int line, tt = 0;
   char buf[MAX_CHAR], tmp[MAX_CHAR];
   FILE* in;
   if((in = fopen(filename, "r")) == NULL)
@@ -404,10 +412,10 @@ int ReadProg2Mem(char *filename)
       fprintf(stderr, "error: wrong instruction in line %d, abort.\n", line);
       lexit(1);
     }
-    total_line++;
+    tt++;
   }
   fclose(in);
-  return total_line;
+  return tt;
 }
 
 int ReadInput2Mem(char *filename)
@@ -515,6 +523,58 @@ void ListMem(char *string)
   }
 }
 
+void Disasm(char *string) {
+  const char opcode[16][4] = { "hlt", "add", "sub", "and", "xor", "shl", "shr",
+    "lda", "ld", "st", "ldi", "sti", "bz", "bp", "jr", "jl" };
+  int a, b, i, two = false, op, rd, rs, rt, addr;
+  for(i = 0; i < strlen(string) -2; i++)
+    if(strncmp(string +i, "..", 2) == 0)
+      two = true;
+  if(two) {
+    a = Hex2Int(strtok(string, "."));
+    b = Hex2Int(strtok(NULL, "."));
+  }
+  else {
+    a = Hex2Int(string) -6;
+    b  = a + 12;
+    if(a < 6) a = 0;
+    if(b > 256) b = 256;
+  }
+  if(a == -1 || b == -1 || a > 256 || b > 256) {
+    fprintf(stderr, "error: invalid line.\n");
+    return;
+  }
+  for(i = a; i <= b; i++) {
+    op   = (mem[i] >> 12) & 0xF;
+    rd   = (mem[i] >>  8) & 0xF;
+    rs   = (mem[i] >>  4) & 0xF;
+    rt   = (mem[i] >>  0) & 0xF;
+    addr = (mem[i] >>  0) & 0xFF;
+    printf("%s    ", Int2Hex(i));
+    printf("%-10s  %s\t", Int2Hex(mem[i]), opcode[op]);
+    switch(op) {
+      case 0:
+        printf("\n");
+        break;
+      case 1: case 2: case 3: case 4: case 5: case 6:
+        printf(" r%c, r%c, r%c\n", rd + (rd < 10)? '0': ('a' -10),
+            rs + ((rs < 10)? '0': ('a' -10)), rt + ((rt < 10)? '0': ('a' -10)));
+        break;
+      case 7: case 8: case 9: case 12: case 13: case 15:
+        printf(" r%c, 0x%s\n", rd + ((rd < 10)? '0': ('a' -10)), Int2Hex(addr));
+        break;
+      case 10: case 11:
+        printf(" r%c, r%c\n", rd + ((rd < 10)? '0': ('a' -10)), rt + ((rt < 10)? '0': ('a' -10)));
+        break;
+      case 14:
+        printf(" r%c\n", rd + ((rd < 10)? '0': ('a' -10)));
+        break;
+      default:
+        printf("Invalid opcode.\n");
+    }
+  }
+}
+
 int nmask(int n)                 /* mask for right shift negative numbers */
 {
   int i, sum = 0;
@@ -554,32 +614,34 @@ void lexit(int n)
 void usage(int n)
 {
   if(n == 0) {
-    printf("Usage: toyvm [-d] [-v] ToyFile [InputFile]\n");
-    printf("       toyvm [--version| -h| --help]\n\n");
-    printf("NORMAL MODE\n");
-    printf("    -d            Enter Debug Mode\n");
-    printf("    -v            Verbose mode\n");
-    printf("    ToyFile       *.toy file you want to run.\n");
-    printf("    InputFile     This is optional, using InputFile instead of manually input.\n");
-    printf("    -h, --help    Show this help list.\n");
-    printf("    --version     Show version.\n\n");
+    printf("Usage: toyvm [-d] [-v] ToyFile [InputFile]\n\
+       toyvm [--version| -h| --help]\n\n\
+NORMAL MODE\n\
+    -d            Enter Debug Mode\n\
+    -v            Verbose mode\n\
+    ToyFile       *.toy file you want to run.\n\
+    InputFile     This is optional, using InputFile instead of manually input.\n\
+    -h, --help    Show this help list.\n\
+    --version     Show version.\n\n");
   }
-  printf("DEBUG MODE\n");
-  printf("    run, r        Run program\n");
-  printf("    step, s       Run program in step mode, each line is shown before executing.\n");
-  printf("    next, n       Execute next program line (after stopping).\n");
-  printf("    continue, c   Continue  running your program (after stopping, e.g. at a\n");
-  printf("                  break point).\n");
-  printf("    break [LINE]  Set a breakpoint, program will pause at break point.\n");
-  printf("    info          Show breakpoint information.\n");
-  printf("    delete [NUM]  Delete a breakpoint, NUM can be found by the `info' command.\n");
-  printf("    reg           Show register data.\n");
-  printf("    list [FMT]    List memory file. FMT can be a line or a range. If a line is\n");
-  printf("                  entered, list will show 13 line around it. If a ragne like\n");
-  printf("                  A..B is entered, list will show lines from A to B.\n");
-  printf("    verbose, v    Verbose mode, every instruction is shown before executing.\n");
-  printf("    noverbose, nv Disable verbose mode.\n");
-  printf("    quit, q       Quit toyvm debuger.\n\n");
+  printf("DEBUG MODE\n\
+    run, r        Run program\n\
+    step, s       Run program in step mode, each line is shown before executing.\n\
+    next, n       Execute next program line (after stopping).\n\
+    continue, c   Continue  running your program (after stopping, e.g. at a\n\
+                  break point).\n\
+    break [LINE]  Set a breakpoint, program will pause at break point.\n\
+    info          Show breakpoint information.\n\
+    delete [NUM]  Delete a breakpoint, NUM can be found by the `info' command.\n\
+    reg           Show register data.\n\
+    list [FMT]    List memory file. FMT can be a line or a range. If a line is\n\
+                  entered, list will show 13 line around it. If a ragne like\n\
+                  A..B is entered, list will show lines from A to B.\n\
+    disasm [FMT]  Disassemble the lines specified by FMT. FMT is same as the\n\
+                  FMT in `list'.\n\
+    verbose, v    Verbose mode, every instruction is shown before executing.\n\
+    noverbose, nv Disable verbose mode.\n\
+    quit, q       Quit toyvm debuger.\n\n");
   if(n == 1) return;
   printf("Please report bugs to Aitjcize <aitjcize@gmail.com>\n");
   lexit(0);
