@@ -37,11 +37,13 @@
  * 0.2.4   - Modulize some part in main to gain readibility.
  * 0.2.4.1 - Fix opcode 'D'.
  * 0.2.4.2 - clear register in reset()
- * 0.2.5   - Add Function `FineInput', since it's stable, 0.2.5 will be stable release.
+ * 0.2.5   - Add Function `FineInput', since it's stable, 0.2.5 will be stable
+ *           release.
  * 0.2.6   - Add ListMem, enable A..B to specified list range.
  *           Add help to TdbLoop
  * 0.2.6.1 - Add cycle count.
  * 0.2.7.0 - Add functionality: disassemble
+ * 0.2.7.1 - Add max clock to TLE, defined by CLOCK_MAX
  */
 
 #include <stdio.h>
@@ -50,12 +52,14 @@
 #include <math.h>
 #include <stdbool.h>
 
-
 #define PROGRAM_NAME "toyvm"
 #define VERSION "0.2.7"
 
 #define MAX_CHAR 256
 #define BREAK_MAX 16
+
+/* Max clock to time limit exceed */
+#define CLOCK_MAX 999999
 
 /* flags */
 bool use_external_input = false;
@@ -127,6 +131,12 @@ int main(int argc, char *argv[])
     }
 
     TdbLoop(&b_count, breakpoints);
+
+    /* Test if clock limit exceed */
+    if(cycle == CLOCK_MAX) {
+      printf("Time limit exceed!\n");
+      exit(1);
+    }
 
     /* Fetch instructions to IR */
     insc = mem[pc];
