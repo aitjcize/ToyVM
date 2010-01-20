@@ -418,6 +418,7 @@ int ReadProg2Mem(char *filename)
       lexit(1);
     }
     mem[line] = Hex2Int(buf +4);
+    buf[8] = 0;  // delete trailing characters
     if(mem[line] == -1) {
       fprintf(stderr, "error: wrong instruction in line %d, abort.\n", line);
       lexit(1);
